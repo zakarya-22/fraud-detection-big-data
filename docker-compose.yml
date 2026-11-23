@@ -1,0 +1,153 @@
+# 12 cœurs au total : master + Jupyter (driver) 2.5 | 3 workers x 3 | history 0.5
+# Mémoire : 3 workers x 3 Go + master ~4 Go -> prévoir ~14 Go pour Docker
+services:
+
+  # ============================================================
+  # SPARK MASTER + JUPYTERLAB (le driver tourne ici)
+  # ============================================================
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my-spark:4.2.0
+    container_name: spark-master
+    hostname: spark-master
+    networks:
+      - network1
+    cpus: 2.5
+    ports:
+      - "9080:8080"      # Spark Master Web UI
+      - "7077:7077"      # Spark Master
+      - "4040:4040"      # Spark Application UI
+      - "8888:8888"      # JupyterLab
+    volumes:
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - ./spark-logs:/tmp/spark-events
+    environment:
+      SPARK_ROLE: master
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: 7077
+      SPARK_MASTER_WEBUI_PORT: 8080
+      SPARK_LOCAL_IP: spark-master
+      JUPYTER_ENABLE: "true"
+      JUPYTER_PORT: 8888
+    restart: unless-stopped
+
+  # ============================================================
+  # SPARK WORKER A
+  # ============================================================
+  spark-worker-a:
+    image: my-spark:4.2.0
+    container_name: spark-worker-a
+    hostname: spark-worker-a
+    networks:
+      - network1
+    depends_on:
+      - spark-master
+    cpus: 3
+    mem_limit: 3g        # 2 Go executor + marge JVM
+    ports:
+      - "9082:8080"
+    volumes:
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - ./spark-logs:/tmp/spark-events
+    environment:
+      SPARK_ROLE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_CORES: 3
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_EXECUTOR_MEMORY: 2G
+      SPARK_LOCAL_IP: spark-worker-a
+      SPARK_WORKER_WEBUI_PORT: 8080
+    restart: unless-stopped
+
+  # ============================================================
+  # SPARK WORKER B
+  # ============================================================
+  spark-worker-b:
+    image: my-spark:4.2.0
+    container_name: spark-worker-b
+    hostname: spark-worker-b
+    networks:
+      - network1
+    depends_on:
+      - spark-master
+    cpus: 3
+    mem_limit: 3g
+    ports:
+      - "9083:8080"
+    volumes:
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - ./spark-logs:/tmp/spark-events
+    environment:
+      SPARK_ROLE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_CORES: 3
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_EXECUTOR_MEMORY: 2G
+      SPARK_LOCAL_IP: spark-worker-b
+      SPARK_WORKER_WEBUI_PORT: 8080
+    restart: unless-stopped
+
+  # ============================================================
+  # SPARK WORKER C
+  # ============================================================
+  spark-worker-c:
+    image: my-spark:4.2.0
+    container_name: spark-worker-c
+    hostname: spark-worker-c
+    networks:
+      - network1
+    depends_on:
+      - spark-master
+    cpus: 3
+    mem_limit: 3g
+    ports:
+      - "9084:8080"
+    volumes:
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+      - ./spark-logs:/tmp/spark-events
+    environment:
+      SPARK_ROLE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_CORES: 3
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_EXECUTOR_MEMORY: 2G
+      SPARK_LOCAL_IP: spark-worker-c
+      SPARK_WORKER_WEBUI_PORT: 8080
+    restart: unless-stopped
+
+  # ============================================================
+  # SPARK HISTORY SERVER
+  # ============================================================
+  spark-history-server:
+    image: my-spark:4.2.0
+    container_name: spark-history
+    hostname: spark-history
+    networks:
+      - network1
+    depends_on:
+      - spark-master
+    cpus: 0.5
+    ports:
+      - "18080:18080"
+    volumes:
+      - ./spark-logs:/tmp/spark-events
+    environment:
+      SPARK_ROLE: history
+      SPARK_HISTORY_OPTS: >-
+        -Dspark.history.fs.logDirectory=/tmp/spark-events
+        -Dspark.history.ui.port=18080
+    restart: unless-stopped
+
+# ============================================================
+# NETWORK
+# ============================================================
+networks:
+  network1:
+    name: mynetwork
+    driver: bridge

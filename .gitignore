@@ -1,0 +1,9 @@
+data/source/*.csv
+data/brut/*
+data/propre/*
+data/ml/*
+data/modeles/*
+!data/**/.gitkeep
+spark-logs/*
+!spark-logs/.gitkeep
+.ipynb_checkpoints/
