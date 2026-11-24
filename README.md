@@ -25,14 +25,14 @@ projet-fraude-spark/
 ├── apps/                    -> /opt/spark-apps (notebooks, à lancer dans l'ordre)
 │   ├── 00_creation_donnees_brutes.ipynb   CSV -> Parquet par jour, avec 11 problèmes de qualité
 │   ├── 01_nettoyage.ipynb                 diagnostic et correction de chaque problème
-│   ├── 02_exploration_preparation.ipynb   exploration Spark SQL, séparation 80 / 20
-│   ├── 03_entrainement.ipynb              pipeline, comparaison des modèles, CrossValidator, seuil
+│   ├── 02_exploration_preparation.ipynb   exploration Spark SQL, séparation temporelle par step
+│   ├── 03_entrainement.ipynb              pipeline, comparaison des modèles, poids, hyperparamètres, seuil
 │   └── 04_test_final.ipynb                évaluation finale sur le jeu de test
 ├── data/                    -> /opt/spark-data
 │   ├── source/              CSV PaySim téléchargé
 │   ├── brut/                Parquet bruts, un dossier par jour (date=2024-01-01, ...)
 │   ├── propre/              Parquet nettoyé
-│   ├── ml/                  train.parquet (80 %), test.parquet (20 %)
+│   ├── ml/                  train (steps 1–520), validation (521–631), test (632–743)
 │   └── modeles/             modèle sauvegardé + seuil.txt
 └── spark-logs/              -> /tmp/spark-events (History Server)
 ```
@@ -88,14 +88,22 @@ Arrêt : `docker compose down`
 
 ## Choix techniques
 
-- **Séparation des données** : 80 % entraînement / 20 % test, écrits dans deux fichiers séparés.
-  La validation est faite à l'intérieur de l'entraînement : 80/20 interne pour comparer les modèles
-  et choisir le seuil, et validation croisée à 3 plis pour les hyperparamètres.
-  Le test n'est utilisé que dans le notebook 04.
+- **Scénario** : chaque transaction est notée au moment où elle est demandée, avant sa validation.
+  Les 5 types de transaction sont gardés ; `type` est une variable du modèle.
+- **Temps** : `step` (1 step = 1 heure simulée) est la référence. `transaction_time` est seulement une
+  date d'affichage (`step - 1` heures après le 1er janvier 2024).
+- **Séparation temporelle** : entraînement = steps 1–520, validation = 521–631, test = 632–743.
+  Tous les choix (modèle, poids, hyperparamètres, seuil) sont faits sur la validation ; le test sert une seule fois.
+- **Variables du modèle** : `amount` (en log), `type`, heure tirée de `step`, `oldbalanceDest`.
+- **Variables exclues** :
+  - soldes après transaction (`newbalanceOrig`, `newbalanceDest`) et écarts calculés avec eux : inconnus au moment de la décision ;
+  - soldes de l'émetteur (`oldbalanceOrg`) : raccourci du simulateur (le fraudeur vide toujours le compte) ;
+    testé à part dans le notebook 03 seulement pour mesurer son effet ;
+  - `nameOrig`, `nameDest` (identifiants) et `isFlaggedFraud` (règle du simulateur).
 - **Pipeline** (étages Spark uniquement) : `Imputer` → `SQLTransformer` → `StringIndexer` → `OneHotEncoder`
   → `VectorAssembler` → `StandardScaler` → modèle.
 - **Modèles** : régression logistique, Random Forest, GBT.
-- **Déséquilibre** : poids de classe dans `weightCol`, calculés sur le jeu d'entraînement.
-- **Métriques** : PR-AUC, puis précision, rappel et F1 sur la classe fraude.
-- **Mise en garde** : les soldes de PaySim contiennent des artefacts du simulateur (l'auteur déconseille
-  de les utiliser). Les modèles sont donc comparés avec et sans ces colonnes.
+- **Déséquilibre** : poids des fraudes dans `weightCol` (1, 10 ou rapport balanced, choisi sur la validation).
+- **Hyperparamètres** : grille `ParamGridBuilder`, chaque combinaison évaluée sur la validation temporelle
+  (un `CrossValidator` mélangerait les périodes au hasard).
+- **Métriques** : PR-AUC (comparée au hasard = taux de fraude), puis précision, rappel et F1 sur la classe fraude.
