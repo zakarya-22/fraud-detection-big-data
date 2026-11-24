@@ -2,8 +2,8 @@
 
 Classification de transactions frauduleuses (dataset PaySim) avec un Pipeline Spark ML,
 exécutée sur un cluster Spark simulé par Docker (1 master + 3 workers) sur une seule machine.
-Les données de départ sont transformées en **fichiers Parquet bruts avec des problèmes de qualité**,
-qui sont ensuite diagnostiqués et corrigés avec Spark.
+On transforme d'abord le CSV de départ en fichiers Parquet bruts, avec des problèmes de qualité
+ajoutés exprès. On les diagnostique puis on les corrige avec Spark.
 
 ## Données
 
@@ -88,22 +88,22 @@ Arrêt : `docker compose down`
 
 ## Choix techniques
 
-- **Scénario** : chaque transaction est notée au moment où elle est demandée, avant sa validation.
+- Scénario : chaque transaction est notée au moment où elle est demandée, avant sa validation.
   Les 5 types de transaction sont gardés ; `type` est une variable du modèle.
-- **Temps** : `step` (1 step = 1 heure simulée) est la référence. `transaction_time` est seulement une
+- Temps : `step` (1 step = 1 heure simulée) est la référence. `transaction_time` est seulement une
   date d'affichage (`step - 1` heures après le 1er janvier 2024).
-- **Séparation temporelle** : entraînement = steps 1–520, validation = 521–631, test = 632–743.
+- Séparation temporelle : entraînement = steps 1–520, validation = 521–631, test = 632–743.
   Tous les choix (modèle, poids, hyperparamètres, seuil) sont faits sur la validation ; le test sert une seule fois.
-- **Variables du modèle** : `amount` (en log), `type`, heure tirée de `step`, `oldbalanceDest`.
-- **Variables exclues** :
+- Variables du modèle : `amount` (en log), `type`, heure tirée de `step`, `oldbalanceDest`.
+- Variables exclues :
   - soldes après transaction (`newbalanceOrig`, `newbalanceDest`) et écarts calculés avec eux : inconnus au moment de la décision ;
   - soldes de l'émetteur (`oldbalanceOrg`) : raccourci du simulateur (le fraudeur vide toujours le compte) ;
     testé à part dans le notebook 03 seulement pour mesurer son effet ;
   - `nameOrig`, `nameDest` (identifiants) et `isFlaggedFraud` (règle du simulateur).
-- **Pipeline** (étages Spark uniquement) : `Imputer` → `SQLTransformer` → `StringIndexer` → `OneHotEncoder`
+- Pipeline (étages Spark uniquement) : `Imputer` → `SQLTransformer` → `StringIndexer` → `OneHotEncoder`
   → `VectorAssembler` → `StandardScaler` → modèle.
-- **Modèles** : régression logistique, Random Forest, GBT.
-- **Déséquilibre** : poids des fraudes dans `weightCol` (1, 10 ou rapport balanced, choisi sur la validation).
-- **Hyperparamètres** : grille `ParamGridBuilder`, chaque combinaison évaluée sur la validation temporelle
+- Modèles : régression logistique, Random Forest, GBT.
+- Déséquilibre : poids des fraudes dans `weightCol` (1, 10 ou rapport balanced, choisi sur la validation).
+- Hyperparamètres : grille `ParamGridBuilder`, chaque combinaison évaluée sur la validation temporelle
   (un `CrossValidator` mélangerait les périodes au hasard).
-- **Métriques** : PR-AUC (comparée au hasard = taux de fraude), puis précision, rappel et F1 sur la classe fraude.
+- Métriques : PR-AUC (comparée au hasard = taux de fraude), puis précision, rappel et F1 sur la classe fraude.
