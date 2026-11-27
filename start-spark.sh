@@ -17,7 +17,7 @@ case "$SPARK_ROLE" in
         --allow-root \
         --ServerApp.token='' \
         --ServerApp.password='' \
-        --ServerApp.root_dir=/opt/spark-apps
+        --ServerApp.root_dir=/workspace
     else
       exec /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master \
         --host "$SPARK_MASTER_HOST" \
