@@ -21,7 +21,6 @@ services:
       - "4040:4040"      # Spark Application UI
       - "8888:8888"      # JupyterLab
     volumes:
-      - .:/workspace
       - ./apps:/opt/spark-apps
       - ./data:/opt/spark-data
       - ./spark-logs:/tmp/spark-events
